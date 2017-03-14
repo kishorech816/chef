@@ -38,6 +38,7 @@ yum_repository 'Active-Active' do
  ).each do |p|
  yum_package p do
  action :install
+ end
 end
 
 yum_package 'jdk' do
@@ -195,3 +196,45 @@ gradle-2.12.zip
 java-1.6.0_25.zip
 ).each do |z|
  #break up the file names and from a vaild source url
+  r = z.chomp('.zip') #strip .zip from the file name to create r (resource)
+  n = r.split('-').first # keep only the first part of r to create n (name)
+  v = r.split('-').last #keep only the last part of r to create v (version)
+  s = "#{node['artifactory']['url']}/simple/libs-release-local/com/barclays/chef/#{n}/#{v}/#{z}" # combine to create s ( source url )
+  #install with ark
+ ark r do
+  path '/apps/jenkins'
+  url s
+  action :put
+  owner node['jenkins']['user']
+  end
+ end
+ 
+ file '/apps/jenkins/jobs/copy-to-app-server-matrix/cluster.list' do
+  mode '0644'
+  owner node['jenkins']['user']
+  action :create_if_missing
+ end
+ 
+ execute 'Set title in jenkins config.xml' do
+  user node['jenkins']['user']
+  command '/apps/jenkins/scripts/setJnekinsName.sh'
+ end
+ 
+ template 'jenkinsEnvs.properties' do
+ path '/apps/jenkins/jenkinsEnvs.properties'
+ source 'JenkinsEnvs.erb'
+ owner node['jenkins']['user']
+ mode '0644'
+ action :create_if_missing
+end
+
+#create /opt/jenkins symlink
+
+link '/opt/jenkins'
+ to '/apps/jenkins'
+end
+
+service 'jenkins' do
+ supports status: true, start: true, restart: true, reload: true
+ action [:enable, :start]
+end
